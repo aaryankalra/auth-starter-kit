@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 
+import { connectDB } from "./db/db.js";
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -15,8 +17,10 @@ app.get("/api/ping", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(
-    `Server running successfully on PORT ${PORT} or http://localhost:${PORT}`
-  );
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(
+      `Server running successfully on PORT ${PORT} or http://localhost:${PORT}`
+    );
+  });
 });
