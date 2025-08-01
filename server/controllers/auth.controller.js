@@ -76,6 +76,13 @@ export const login = async (req, res) => {
 
     const token = generateToken(user._id);
 
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "Strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res.status(200).json({
       success: true,
       message: "User logged in successfully.",
@@ -83,7 +90,6 @@ export const login = async (req, res) => {
         ...user._doc,
         password: undefined,
       },
-      token: token,
     });
   } catch (error) {
     console.error("Login error: ", error);
@@ -92,6 +98,19 @@ export const login = async (req, res) => {
       message: "Internal Server Error",
     });
   }
+};
+
+export const logout = async (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: false,
+    sameSite: "Strict",
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Logged out successfully.",
+  });
 };
 
 export const forgotPassword = async (req, res) => {
