@@ -1,6 +1,8 @@
 import { User } from "../models/user.model.js";
+import { generateResetToken } from "../utils/generateResetToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 export const signup = async (req, res) => {
   const { name, email, password } = req.body;
@@ -90,4 +92,75 @@ export const login = async (req, res) => {
       message: "Internal Server Error",
     });
   }
+};
+
+export const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Email is required.",
+    });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(200).json({
+      success: true,
+      message: "If user exists, a link to reset password was sent.",
+    });
+  }
+
+  const { token, hashedToken, expiry } = generateResetToken();
+  user.resetPasswordToken = hashedToken;
+  user.resetPasswordExpiresIn = expiry;
+  await user.save();
+
+  const resetUrl = `${process.env.CLIENT_URL}/reset/${token}`;
+
+  return res.status(200).json({
+    success: true,
+    message: "If user exists, a link to reset password was sent.",
+    link: resetUrl,
+  });
+};
+
+export const resetPassword = async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  if (!password || password.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: "Password must be atleast 6 characters.",
+    });
+  }
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpiresIn: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res.status(400).json({
+      success: false,
+      message: "Token is invalid or expired.",
+    });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  user.password = hashedPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpiresIn = undefined;
+
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset successfully",
+  });
 };
