@@ -5,6 +5,7 @@ import "dotenv/config";
 import { connectDB } from "./db/db.js";
 
 import authRoutes from "./routes/auth.route.js";
+import userRoutes from "./routes/user.route.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +21,7 @@ app.get("/api/ping", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {
