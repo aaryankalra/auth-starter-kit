@@ -5,13 +5,23 @@ export const protect = async (req, res, next) => {
   const token = req.cookies.token;
 
   if (!token) {
-    return res
-      .status(401)
-      .json({ success: false, message: "Not authenticated" });
+    return res.status(401).json({
+      success: false,
+      message: "Not authenticated",
+    });
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id;
+    const user = await User.findById(decoded.userId);
+
+    if (!user || !user.isVerified) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized or email not verified",
+      });
+    }
+
+    req.userId = user._id;
     next();
   } catch (error) {
     console.error("Auth error: ", error);

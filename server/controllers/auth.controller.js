@@ -1,8 +1,10 @@
 import { User } from "../models/user.model.js";
 import { generateResetToken } from "../utils/generateResetToken.js";
 import { generateToken } from "../utils/generateToken.js";
+import { generateOtp } from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { sendVerificationMail } from "../utils/sendEmail.js";
 
 export const signup = async (req, res) => {
   const { name, email, password } = req.body;
@@ -25,22 +27,89 @@ export const signup = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const { otp, otpExpiry } = generateOtp();
+
     const newUser = await User.create({
       name: name,
       email: email,
       password: hashedPassword,
+      otp: otp,
+      otpExpiresIn: otpExpiry,
     });
+
+    await sendVerificationMail(email, name, otp);
 
     res.status(201).json({
       success: true,
-      message: "User created successfully.",
+      message: "User created successfully. Please verify your email via otp",
       data: {
         ...newUser._doc,
+        _id: undefined,
         password: undefined,
+        otp: undefined,
+        otpExpiresIn: undefined,
       },
     });
   } catch (error) {
     console.error("Signup error: ", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+export const verify = async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({
+      success: false,
+      message: "All fields are required.",
+    });
+  }
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "User already verified",
+      });
+    }
+
+    if (!user.otp || user.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    if (user.otpExpiresIn < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired",
+      });
+    }
+
+    user.isVerified = true;
+    user.otp = undefined;
+    user.otpExpiresIn = undefined;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Email verified successfully.",
+    });
+  } catch (error) {
+    console.error("Error in verifying OTP: ", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -74,11 +143,18 @@ export const login = async (req, res) => {
       });
     }
 
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email before logging in.",
+      });
+    }
+
     const token = generateToken(user._id);
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
