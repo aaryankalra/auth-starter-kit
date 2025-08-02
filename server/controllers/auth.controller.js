@@ -4,7 +4,7 @@ import { generateToken } from "../utils/generateToken.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import { sendVerificationMail } from "../utils/sendEmail.js";
+import { sendVerificationMail, sendWelcomeMail } from "../utils/sendEmail.js";
 
 export const signup = async (req, res) => {
   const { name, email, password } = req.body;
@@ -59,7 +59,7 @@ export const signup = async (req, res) => {
   }
 };
 
-export const verify = async (req, res) => {
+export const verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) {
     return res.status(400).json({
@@ -104,12 +104,56 @@ export const verify = async (req, res) => {
 
     await user.save();
 
+    await sendWelcomeMail(email, user.name);
+
     return res.status(200).json({
       success: true,
       message: "Email verified successfully.",
     });
   } catch (error) {
     console.error("Error in verifying OTP: ", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+export const resendOTP = async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Email is required." });
+  }
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
+    }
+
+    if (user.isVerified) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User is already verified." });
+    }
+
+    const { otp, otpExpiry } = generateOtp();
+    user.otp = otp;
+    user.otpExpiresIn = otpExpiry;
+    await user.save();
+
+    sendVerificationMail(email, user.name, otp);
+
+    return res.status(200).json({
+      success: true,
+      message: "A new OTP has been sent to your email.",
+    });
+  } catch (error) {
+    console.error("Error in resending OTP: ", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
