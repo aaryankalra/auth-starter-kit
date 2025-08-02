@@ -18,7 +18,8 @@ const userSchema = new mongoose.Schema(
     },
     profilePic: {
       type: String,
-      default: "",
+      enum: ["default", "male", "female"],
+      default: "default",
     },
     lastLogin: {
       type: Date,

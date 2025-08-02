@@ -29,7 +29,7 @@ export const getProfile = async (req, res) => {
 };
 
 export const updateProfile = async (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, profilePic } = req.body;
   if (!name || !email) {
     return res.status(400).json({
       success: false,
@@ -54,7 +54,11 @@ export const updateProfile = async (req, res) => {
       user.email = email;
     }
 
-    const updatedUser = await user.save();
+    if (profilePic) {
+      user.profilePic = profilePic;
+    }
+
+    await user.save();
 
     return res.status(200).json({
       success: true,
